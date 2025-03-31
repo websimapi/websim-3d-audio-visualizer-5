@@ -69,6 +69,26 @@ export const config = {
         rotationSpeed: 0.0002 // Base rotation speed of the galaxy
     },
 
+    // New visualization: Hypercube Flux
+    hypercube: {
+        size: 80,             // Base size of the hypercube projection
+        lineWidth: 2.0,       // Thickness of the lines
+        vertexDistortion: 15, // How much vertices move based on audio
+        innerCubeSizeFactor: 0.5, // Size of the inner cube relative to the outer
+        colorInnerBase: 0x00ffff, // Base color for inner cube lines
+        colorOuterBase: 0xff00ff, // Base color for outer cube lines
+        colorConnectBase: 0xffffff, // Base color for connecting lines
+        particleCountEdge: 500, // Number of particles flowing on edges
+        particleCountAmbient: 1000, // Number of ambient particles
+        particleSizeEdge: 1.5,
+        particleSizeAmbient: 1.0,
+        particleSpeedFactor: 5.0, // How fast edge particles move based on audio
+        particleOpacityEdge: 0.8,
+        particleOpacityAmbient: 0.5,
+        ambientSpread: 150,    // How far ambient particles spread
+        twistFactor: 0.1       // How much the outer cube twists with high frequencies
+    },
+
     // Audio analysis settings
     audio: {
         fftSize: 256,       // FFT size (power of 2). Higher values give more frequency bins.
