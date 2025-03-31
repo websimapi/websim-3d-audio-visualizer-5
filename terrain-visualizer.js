@@ -15,9 +15,12 @@ function createTerrainVisualization() {
     
     geometry.rotateX(-Math.PI / 2);
     
-    const originalPositions = [];
+    const positions = geometry.attributes.position.array;
+    
+    // Store original vertices for distortion
+    const originalVertices = [];
     for (let i = 0; i < geometry.attributes.position.array.length; i += 3) {
-        originalPositions.push(
+        originalVertices.push(
             new THREE.Vector3(
                 geometry.attributes.position.array[i],
                 geometry.attributes.position.array[i + 1],
@@ -28,10 +31,10 @@ function createTerrainVisualization() {
     
     // Vertex colors for enhanced gradient effect
     const colors = [];
-    const positions = geometry.attributes.position.array;
+    const positionsForColors = geometry.attributes.position.array;
     
-    for (let i = 0; i < positions.length; i += 3) {
-        const y = positions[i + 1];
+    for (let i = 0; i < positionsForColors.length; i += 3) {
+        const y = positionsForColors[i + 1];
         
         // Get a color between color1 and color2 based on height
         const color = new THREE.Color(config.terrain.color1);
@@ -54,7 +57,7 @@ function createTerrainVisualization() {
     });
     
     const terrain = new THREE.Mesh(geometry, material);
-    terrain.userData = { originalPositions };
+    terrain.userData = { originalPositions: originalVertices };
     group.add(terrain);
     
     // Add gridlines for a more technical look
@@ -247,17 +250,17 @@ function updateTerrainVisualization(activeVisualization, dataArray, sensitivity)
     // Animate fog particles
     const fogPositions = fog.geometry.attributes.position;
     const fogSizes = fog.geometry.attributes.size;
-    const origFogPositions = fog.userData.positions;
-    const origFogSizes = fog.userData.sizes;
-
+    const originalFogPositions = fog.userData.positions;
+    const originalFogSizes = fog.userData.sizes;
+    
     for (let i = 0; i < fogPositions.count; i++) {
         const idx = i % dataArray.length;
         const frequencyValue = dataArray[idx] / 255.0;
         
         // Get original position
-        const origX = origFogPositions[i * 3];
-        const origY = origFogPositions[i * 3 + 1];
-        const origZ = origFogPositions[i * 3 + 2];
+        const origX = originalFogPositions[i * 3];
+        const origY = originalFogPositions[i * 3 + 1];
+        const origZ = originalFogPositions[i * 3 + 2];
         
         // Add complex movement
         const time = Date.now() * 0.0005;
@@ -275,7 +278,7 @@ function updateTerrainVisualization(activeVisualization, dataArray, sensitivity)
         );
         
         // Update particle size based on audio
-        fogSizes.setX(i, origFogSizes[i] * (0.8 + frequencyValue * 1.5));
+        fogSizes.setX(i, originalFogSizes[i] * (0.8 + frequencyValue * 1.5));
     }
     
     fogPositions.needsUpdate = true;
