@@ -42,4 +42,3 @@ export const config = {
         autoRotateSpeed: 0.5
     }
 };
-
