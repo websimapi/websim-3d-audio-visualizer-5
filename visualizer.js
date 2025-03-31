@@ -74,9 +74,21 @@ async function setupAudioCapture() {
     try {
         // Request user to select a tab to capture
         const stream = await navigator.mediaDevices.getDisplayMedia({
-            video: false,
-            audio: true
+            video: true,  
+            audio: true,
+            preferCurrentTab: false, 
+            selfBrowserSurface: "exclude", 
+            systemAudio: "include" 
         });
+        
+        // Check if audio track exists
+        const audioTracks = stream.getAudioTracks();
+        if (audioTracks.length === 0) {
+            throw new Error('No audio track found. Please select a tab with audio.');
+        }
+        
+        // Stop video tracks as we only need audio
+        stream.getVideoTracks().forEach(track => track.stop());
         
         statusElement.textContent = 'Audio capture started';
         startButton.textContent = 'Change Tab Source';
@@ -107,11 +119,16 @@ async function setupAudioCapture() {
         stream.getAudioTracks()[0].onended = () => {
             statusElement.textContent = 'Audio capture stopped';
             startButton.textContent = 'Start Visualizer';
+            if (activeVisualization) {
+                scene.remove(activeVisualization);
+                activeVisualization = null;
+            }
         };
         
     } catch (error) {
         console.error('Error capturing audio:', error);
         statusElement.textContent = 'Error: ' + error.message;
+        startButton.textContent = 'Try Again';
     }
 }
 
@@ -443,4 +460,3 @@ visualizationTypeSelector.addEventListener('change', (e) => {
 
 // Initialize everything
 initScene();
-
