@@ -1,30 +1,31 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { config } from './config.js';
-// Static visualization modules are no longer directly used for switching,
-// but keep them imported if the LLM needs examples or if we want a fallback.
+// Import visualization modules
 import * as Bars from './visualizations/bars.js';
 import * as Sphere from './visualizations/sphere.js';
 import * as Terrain from './visualizations/terrain.js';
-import * as Galaxy from './visualizations/galaxy.js';
+import * as Galaxy from './visualizations/galaxy.js'; // Import the new visualization
 
 // Main variables
 let scene, camera, renderer, analyser, dataArray;
 let audioContext, mediaStreamSource;
-let activeVisualization = null; // This will hold the group/object returned by the create function
-let activeVisualizationModule = null; // This will hold the dynamically imported module
-let controls;
-let dynamicGenerationInterval = null;
-const GENERATION_INTERVAL = 90 * 1000; // 90 seconds
-let generationInProgress = false;
-let retryTimeout = null;
+let activeVisualization = null; // This will now hold the group/object returned by the create function
+let activeVisualizationModule = null; // This will hold the imported module (Bars, Sphere, etc.)
+let controls, visualizationType = 'bars';
+let llmConversationHistory = []; // Keep track of conversation for context
 
 // DOM elements
 const startButton = document.getElementById('startButton');
 const statusElement = document.getElementById('status');
 const sensitivitySlider = document.getElementById('sensitivity');
 const smoothingSlider = document.getElementById('smoothing');
-const dynamicStatusElement = document.getElementById('dynamic-status');
+const visualizationTypeSelector = document.getElementById('visualizationType');
+const aiGenerateButton = document.getElementById('aiGenerateButton');
+const aiModal = document.getElementById('aiModal');
+const closeModalButton = document.getElementById('closeModalButton');
+const aiGeneratedCodeTextarea = document.getElementById('aiGeneratedCode');
+const aiLoadingIndicator = document.getElementById('aiLoadingIndicator');
 
 // Initialize the scene
 function initScene() {
@@ -51,7 +52,7 @@ function initScene() {
     document.getElementById('visualizer-container').appendChild(renderer.domElement);
 
     // Add ambient light
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // Slightly brighter ambient light
     scene.add(ambientLight);
 
     // Add point light for more dynamic lighting
@@ -65,7 +66,7 @@ function initScene() {
     controls.dampingFactor = 0.05;
     controls.autoRotate = true;
     controls.autoRotateSpeed = config.camera.autoRotateSpeed;
-    controls.listenToKeyEvents(window);
+    controls.listenToKeyEvents(window); // Allow keyboard controls
 
     // Handle window resize
     window.addEventListener('resize', onWindowResize);
@@ -77,153 +78,10 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// --- Dynamic Visualization Generation ---
-
-const LLM_PROMPT = `
-You are an expert Three.js developer creating audio visualizations.
-Generate JavaScript code for a *new* and *unique* audio visualizer component.
-The code must be a valid JavaScript ES module.
-It must export two functions:
-1.  \`createVisualization(scene, config)\`:
-    *   Receives the Three.js \`scene\` and a \`config\` object.
-    *   Must create and return a single Three.js \`Group\` or \`Object3D\` containing all visualization elements.
-    *   Can use any Three.js features (geometries, materials, particles, meshes, lights within the group).
-    *   The \`config\` object contains parameters the user might want to tune (example structure below). You can define reasonable defaults within the generated code or assume they exist in a hypothetical section of the passed \`config\`.
-    *   Example config structure passed to your function (feel free to use these or define your own structure within your code):
-        \`\`\`javascript
-        {
-            someVisualizationName: { // Use a descriptive name based on your visualization
-                param1: value1,
-                param2: value2,
-                color1: 0xff00ff,
-                // ... other specific params ...
-            },
-            // Potentially other visualization configs exist
-            audio: { fftSize: 256, ... }, // You probably won't need audio config here
-            camera: { ... } // You probably won't need camera config here
-        }
-        \`\`\`
-
-2.  \`updateVisualization(group, dataArray, analyser, sensitivity, config)\`:
-    *   Receives the \`group\` returned by \`createVisualization\`, the \`dataArray\` (Uint8Array of frequency data), the \`analyser\` node, a \`sensitivity\` float (usually 0.5-5), and the same \`config\` object.
-    *   Must update the elements within the \`group\` based on the \`dataArray\` and \`sensitivity\`.
-    *   \`dataArray\` length is \`analyser.frequencyBinCount\`. Values are 0-255. Index 0 is low frequencies, higher indices are higher frequencies.
-    *   Make the visualization react dynamically and interestingly to the audio. Use bass, mid, high frequencies creatively.
-
-Constraints & Requirements:
-*   Use \`import * as THREE from 'three';\` for Three.js. Do NOT import OrbitControls or anything else from addons.
-*   Focus on visual creativity and responsiveness to audio. Try complex particle systems, geometry deformations, shader materials (if you are comfortable, but standard materials are fine), or combinations.
-*   Do NOT include any setup code for scene, camera, renderer, audio context, or the animation loop. Only provide the module code with the two exported functions.
-*   The code should be self-contained within the module, defining necessary variables inside the functions or module scope.
-*   Respond ONLY with the raw JavaScript code for the module. Do not wrap it in markdown backticks (\`\`\`), do not add explanations, comments outside the code, or any other text. Just the code itself.
-*   Make this visualization significantly different from typical bar, sphere, or terrain visualizers. Think abstract, generative, or physics-based if possible.
-`;
-
-async function generateAndLoadVisualization() {
-    if (generationInProgress) return;
-    generationInProgress = true;
-    clearTimeout(retryTimeout); // Clear any pending retries
-    dynamicStatusElement.textContent = 'Generating new visualization...';
-    console.log("Requesting new visualization from LLM...");
-
-    try {
-        const completion = await websim.chat.completions.create({
-            messages: [
-                // We don't need conversation history here, each request is independent.
-                { role: "system", content: LLM_PROMPT },
-                { role: "user", content: "Generate a new, unique audio visualizer module code." },
-            ],
-            temperature: 0.8, // Encourage variety
-            // No json: true needed, we want raw code string
-        });
-
-        const generatedCode = completion.content.trim();
-        console.log("LLM generated code:\n", generatedCode);
-
-        if (!generatedCode || !generatedCode.includes('export function createVisualization') || !generatedCode.includes('export function updateVisualization')) {
-            throw new Error("LLM response did not contain valid visualization code structure.");
-        }
-
-        dynamicStatusElement.textContent = 'Loading visualization...';
-        await loadDynamicVisualization(generatedCode);
-        dynamicStatusElement.textContent = 'Visualization loaded. Next update in 90s.';
-
-    } catch (error) {
-        console.error('Error generating or loading visualization:', error);
-        dynamicStatusElement.textContent = `Error: ${error.message}. Retrying in 10s...`;
-        // Retry after a delay
-        retryTimeout = setTimeout(() => {
-            generationInProgress = false; // Allow retry
-            generateAndLoadVisualization();
-        }, 10000); // Retry after 10 seconds
-    } finally {
-        // Only set generationInProgress to false if NOT retrying immediately
-        if (!retryTimeout) {
-            generationInProgress = false;
-        }
-    }
-}
-
-async function loadDynamicVisualization(code) {
-    // Remove existing visualization
-    if (activeVisualization) {
-        scene.remove(activeVisualization);
-        // TODO: Add proper disposal of geometries, materials, textures if needed
-        activeVisualization = null;
-        activeVisualizationModule = null;
-    }
-
-    try {
-        // Use dynamic import with a data URL to load the generated module code
-        const dataUrl = `data:text/javascript,${encodeURIComponent(code)}`;
-        activeVisualizationModule = await import(dataUrl);
-
-        if (!activeVisualizationModule || typeof activeVisualizationModule.createVisualization !== 'function' || typeof activeVisualizationModule.updateVisualization !== 'function') {
-            throw new Error("Dynamically imported module is invalid or missing required functions.");
-        }
-
-        // Create the new visualization
-        // Pass a *copy* or a relevant part of the config to avoid modifications?
-        // For now, pass the whole config. The LLM prompt guides it.
-        activeVisualization = activeVisualizationModule.createVisualization(scene, config);
-
-        if (activeVisualization && activeVisualization instanceof THREE.Object3D) {
-            scene.add(activeVisualization);
-            console.log("Dynamic visualization added to scene.");
-        } else {
-            throw new Error("createVisualization function did not return a valid THREE.Object3D.");
-        }
-    } catch (error) {
-        console.error("Error executing dynamic visualization code:", error);
-        activeVisualization = null; // Ensure it's cleared on error
-        activeVisualizationModule = null;
-        dynamicStatusElement.textContent = `Error loading code: ${error.message}. Waiting for next generation.`;
-        // Let the interval timer try again next time.
-    }
-}
-
-function startDynamicGeneration() {
-    if (dynamicGenerationInterval) {
-        clearInterval(dynamicGenerationInterval);
-    }
-    // Generate the first one immediately
-    generateAndLoadVisualization();
-    // Then generate subsequent ones on interval
-    dynamicGenerationInterval = setInterval(generateAndLoadVisualization, GENERATION_INTERVAL);
-}
-
-function stopDynamicGeneration() {
-    if (dynamicGenerationInterval) {
-        clearInterval(dynamicGenerationInterval);
-        dynamicGenerationInterval = null;
-    }
-    clearTimeout(retryTimeout);
-    dynamicStatusElement.textContent = 'Dynamic generation stopped.';
-}
-
 // Audio capture and analysis setup
 async function setupAudioCapture() {
     try {
+        // Request user to select a tab to capture
         const stream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
             audio: true,
@@ -232,20 +90,24 @@ async function setupAudioCapture() {
             systemAudio: "include"
         });
 
+        // Check if audio track exists
         const audioTracks = stream.getAudioTracks();
         if (audioTracks.length === 0) {
             throw new Error('No audio track found. Please select a tab with audio.');
         }
+
+        // Stop video tracks as we only need audio
         stream.getVideoTracks().forEach(track => track.stop());
 
         statusElement.textContent = 'Audio capture started';
         startButton.textContent = 'Change Tab Source';
 
+        // Close existing audio context if present
         if (audioContext) {
             await audioContext.close();
-            stopDynamicGeneration(); // Stop generation when audio stops
         }
 
+        // Create audio context and analyzer
         audioContext = new AudioContext();
         mediaStreamSource = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser();
@@ -253,74 +115,222 @@ async function setupAudioCapture() {
         analyser.fftSize = config.audio.fftSize;
         analyser.minDecibels = config.audio.minDecibels;
         analyser.maxDecibels = config.audio.maxDecibels;
-        analyser.smoothingTimeConstant = parseFloat(smoothingSlider.value);
+        analyser.smoothingTimeConstant = parseFloat(smoothingSlider.value); // Use current slider value
 
         mediaStreamSource.connect(analyser);
+
+        // Create data array for frequency analysis
         dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-        // Start dynamic generation *instead* of creating a static one
-        startDynamicGeneration();
+        // Create the currently selected visualization
+        await createVisualization(visualizationType); // Make async to handle potential module loading
 
+        // Start animation loop if not already running
         if (!renderer) return;
+        // Ensure animate is only called once
         if (renderer.info.render.frame === 0) {
             animate();
         }
 
+        // Handle stream ending (user stops sharing)
         stream.getAudioTracks()[0].onended = () => {
             statusElement.textContent = 'Audio capture stopped';
             startButton.textContent = 'Start Visualizer';
-            stopDynamicGeneration(); // Stop generation when audio stops
             if (activeVisualization) {
                 scene.remove(activeVisualization);
                 activeVisualization = null;
                 activeVisualizationModule = null;
             }
-            // analyser = null; // Clear analyser?
-            // dataArray = null;
+            // Optionally stop the animation loop or clear dataArray?
+            // For now, let it continue rendering the scene without updates.
         };
 
     } catch (error) {
         console.error('Error capturing audio:', error);
         statusElement.textContent = 'Error: ' + error.message;
         startButton.textContent = 'Try Again';
-        stopDynamicGeneration();
     }
 }
 
-// Update visualization function (calls the dynamically loaded module's update)
-function updateVisualization() {
-    if (!analyser || !activeVisualization || !activeVisualizationModule || !dataArray || !activeVisualizationModule.updateVisualization) return;
-
-    analyser.getByteFrequencyData(dataArray);
-    const sensitivity = parseFloat(sensitivitySlider.value);
-
-    try {
-        activeVisualizationModule.updateVisualization(activeVisualization, dataArray, analyser, sensitivity, config);
-    } catch (error) {
-        console.error("Error during visualization update:", error);
-        // Stop updating this broken viz and try generating a new one immediately
-        if (activeVisualization) {
-            scene.remove(activeVisualization);
-        }
+// Create the selected visualization by calling the appropriate module
+async function createVisualization(type) {
+    // Remove existing visualization if any
+    if (activeVisualization) {
+        scene.remove(activeVisualization);
         activeVisualization = null;
         activeVisualizationModule = null;
-        dynamicStatusElement.textContent = `Runtime Error: ${error.message}. Generating new visualization...`;
-        stopDynamicGeneration(); // Stop interval
-        generationInProgress = false; // Allow immediate generation
-        generateAndLoadVisualization(); // Trigger regeneration now
     }
+
+    // Select the correct module based on type
+    switch (type) {
+        case 'bars':
+            activeVisualizationModule = Bars;
+            break;
+        case 'sphere':
+            activeVisualizationModule = Sphere;
+            break;
+        case 'terrain':
+            activeVisualizationModule = Terrain;
+            break;
+        case 'galaxy': // Add the new case
+            activeVisualizationModule = Galaxy;
+            break;
+        // NOTE: Add cases for dynamically generated visualizations here if
+        // you choose to implement dynamic loading later.
+        default:
+            console.warn(`Unknown or unloaded visualization type: ${type}. Defaulting to 'bars'.`);
+            activeVisualizationModule = Bars; // Default to bars
+            visualizationType = 'bars';
+            visualizationTypeSelector.value = 'bars';
+            break;
+    }
+
+    // Call the create function from the selected module
+    if (activeVisualizationModule && typeof activeVisualizationModule.createVisualization === 'function') {
+        try {
+            activeVisualization = activeVisualizationModule.createVisualization(scene, config);
+            if (activeVisualization) {
+                scene.add(activeVisualization);
+            } else {
+                console.error(`Create function for ${type} did not return an object.`);
+            }
+        } catch (error) {
+            console.error(`Error creating visualization '${type}':`, error);
+            statusElement.textContent = `Error creating ${type}. Try another?`;
+            // Fallback to default if creation fails
+            if (type !== 'bars') {
+                await createVisualization('bars');
+            }
+        }
+    } else {
+        console.error(`Module for ${type} does not have a createVisualization function.`);
+    }
+}
+
+// Update visualizations based on audio data by calling the active module's update function
+function updateVisualization() {
+    if (!analyser || !activeVisualization || !activeVisualizationModule || !dataArray) return;
+
+    // Get audio data
+    analyser.getByteFrequencyData(dataArray);
+
+    // Get sensitivity value from slider
+    const sensitivity = parseFloat(sensitivitySlider.value);
+
+    // Call the update function from the active module
+    if (typeof activeVisualizationModule.updateVisualization === 'function') {
+        try {
+            activeVisualizationModule.updateVisualization(activeVisualization, dataArray, analyser, sensitivity, config);
+        } catch (error) {
+            console.error(`Error updating visualization '${visualizationType}':`, error);
+            // Stop trying to update this broken visualization to prevent console spam
+            activeVisualizationModule = null;
+            statusElement.textContent = `Error updating ${visualizationType}. Please select another.`;
+        }
+    }
+}
+
+// --- AI Generation ---
+
+const VISUALIZATION_IDEAS = `
+- **Bars:** Arrange objects (like cubes) in a circle. Their height, color, or thickness changes based on frequency data. Add a central pulsing core or surrounding particles.
+- **Sphere:** Use a sphere geometry (like Icosahedron). Distort its vertices outwards based on frequencies. Add orbital rings or surrounding particles that react to audio. Use PBR materials (metalness, roughness, emissive).
+- **Terrain:** Use a PlaneGeometry. Modify the Y-position of vertices based on frequency data mapped across the plane, creating a landscape effect. Use vertex colors based on height or frequency. Add fog or a reflective plane underneath.
+- **Galaxy:** Use BufferGeometry with thousands of particles (Points). Position them in a spiral disk shape. Animate their position (rotation, slight movement) and color based on audio averages (bass, mids, highs). Use AdditiveBlending for a glowing effect.
+- **Particles:** General concept - use Points with BufferGeometry. Positions can be random within a volume (sphere, cube) or follow a shape. Animate position, size, or color based on audio data. Add velocity attributes for movement.
+- **Geometry Modification:** Take a base geometry (Torus, Box, etc.) and manipulate its vertices or scale based on audio.
+- **Color & Material:** Change material properties like color (using HSL shifts based on frequency), emissive intensity, metalness, roughness, or opacity based on audio averages (bassAvg, midAvg, overallAvg).
+- **Movement:** Rotate the main group. Add subtle oscillation or random drift. Move objects along paths or push them based on frequency data.
+- **Combining:** Mix elements, e.g., a central reactive sphere with orbiting bars, or a terrain with particle clouds reacting differently.
+`;
+
+async function generateAiVisualizer() {
+    aiGeneratedCodeTextarea.value = ""; // Clear previous code
+    aiLoadingIndicator.style.display = 'block'; // Show loading
+    aiModal.style.display = 'flex'; // Show modal
+
+    const systemPrompt = `
+You are an expert Three.js developer creating audio visualizer modules.
+Generate JavaScript code for a *new*, *creative* audio visualizer module compatible with the existing framework.
+
+**Requirements:**
+1.  **ESM Module:** Use ES6 module syntax (\`import\`, \`export\`).
+2.  **Imports:** Import THREE.js: \`import * as THREE from 'three';\`
+3.  **Exports:** Export two functions:
+    *   \`createVisualization(scene, config)\`:
+        *   Takes the Three.js \`scene\` and the shared \`config\` object as input.
+        *   Creates all necessary Three.js objects (Geometries, Materials, Meshes, Points, Groups).
+        *   Adds them to a main \`THREE.Group()\` instance.
+        *   **Crucially, return this main group.**
+        *   Can access configuration via \`config.someNewVizName\` (use a descriptive name). You might need to *invent* reasonable config values (like particle count, colors, sizes, speeds) if they aren't predefined. Assume the user will add a corresponding entry to \`config.js\` later. Use a placeholder name like 'aiGeneratedViz' for the config key.
+        *   Store any data needed for updates (like original positions, speeds, indices) in the group's \`userData\` or directly on mesh \`userData\`.
+    *   \`updateVisualization(group, dataArray, analyser, sensitivity, config)\`:
+        *   Takes the returned \`group\`, the audio \`dataArray\` (Uint8Array), the \`analyser\` object, the \`sensitivity\` float, and the shared \`config\` object.
+        *   Updates the properties (position, rotation, scale, color, material properties, etc.) of the objects within the \`group\` based on the audio data.
+        *   Use \`dataArray\` values (ranging 0-255). Calculate averages like \`bassAvg\`, \`midAvg\`, \`highAvg\`, \`overallAvg\` or use specific frequency bins (\`dataArray[index]\`). Remember \`analyser.frequencyBinCount\` gives the length of \`dataArray\`.
+        *   Use \`sensitivity\` to scale the audio's effect.
+        *   Access configuration via \`config.aiGeneratedViz\`.
+        *   Mark necessary attributes for update (e.g., \`positions.needsUpdate = true\`, \`colors.needsUpdate = true\`).
+        *   Can use \`Date.now()\` for time-based animations (e.g., slow rotation, oscillation).
+4.  **Creativity:** Combine ideas or invent new visual effects based on the provided concepts. Don't just copy an existing visualizer exactly. Aim for something visually interesting and responsive to audio.
+5.  **Performance:** Be mindful of performance. Avoid overly complex calculations in the update loop, especially inside loops over many vertices or particles. Limit particle/vertex counts to reasonable numbers (e.g., < 50000 particles, < 256x256 terrain segments unless necessary).
+6.  **Error Handling:** Assume the inputs (\`group\`, \`dataArray\`, etc.) are valid within the functions. No need for explicit null checks inside the generated functions.
+7.  **Output:** Respond *only* with the JavaScript code block for the module. Do not include any other text, explanation, or markdown formatting.
+
+**Inspiration / Puzzle Pieces (Combine or adapt these):**
+${VISUALIZATION_IDEAS}
+
+**Example Calculation:**
+\`const bassAvg = (dataArray[0] + dataArray[1] + dataArray[2]) / (3 * 255);\`
+\`const freqIndex = Math.floor((i / particleCount) * analyser.frequencyBinCount);\`
+\`const height = (dataArray[freqIndex] / 255.0) * config.aiGeneratedViz.maxHeight * sensitivity;\`
+
+Generate a new visualizer module code now.
+`;
+
+    try {
+        // Maintain a short history for potential follow-up refinements (optional here)
+        llmConversationHistory.push({ role: "user", content: "Generate a new visualizer module." });
+        llmConversationHistory = llmConversationHistory.slice(-4); // Keep history short
+
+        const completion = await websim.chat.completions.create({
+            messages: [
+                { role: "system", content: systemPrompt },
+                ...llmConversationHistory
+            ],
+        });
+
+        const generatedCode = completion.content;
+        llmConversationHistory.push(completion); // Add AI response to history
+        aiGeneratedCodeTextarea.value = generatedCode;
+
+    } catch (error) {
+        console.error('Error generating AI visualization:', error);
+        aiGeneratedCodeTextarea.value = `// Error generating visualization:\n// ${error.message}\n\n// Please check the console for more details and try again.`;
+    } finally {
+        aiLoadingIndicator.style.display = 'none'; // Hide loading
+    }
+
+}
+
+function showModal() {
+    aiModal.style.display = 'flex';
+}
+
+function hideModal() {
+    aiModal.style.display = 'none';
 }
 
 // Animation loop
 function animate() {
-    requestAnimationFrame(animate);
+    requestAnimationFrame(animate); // Schedule next frame
 
-    if (analyser && dataArray && activeVisualization) { // Check if visualization exists
+    if (analyser && dataArray) { // Only update if audio is active
         updateVisualization();
     }
 
-    controls.update();
-    renderer.render(scene, camera);
+    controls.update(); // Update orbit controls (includes auto-rotate)
+    renderer.render(scene, camera); // Render the scene
 }
 
 // Event listeners
@@ -332,6 +342,25 @@ smoothingSlider.addEventListener('input', (e) => {
     }
 });
 
+visualizationTypeSelector.addEventListener('change', async (e) => { // Make async
+    visualizationType = e.target.value;
+    // Only create new visualization if audio is already set up
+    if (scene && analyser && audioContext && audioContext.state === 'running') {
+        await createVisualization(visualizationType);
+    } else if (scene && !analyser) {
+        // If audio isn't running, just prepare the type for when it starts
+        // No need to call createVisualization here, it will be called in setupAudioCapture
+    }
+});
+
+aiGenerateButton.addEventListener('click', generateAiVisualizer);
+closeModalButton.addEventListener('click', hideModal);
+// Close modal if clicking outside the content area
+window.addEventListener('click', (event) => {
+    if (event.target === aiModal) {
+        hideModal();
+    }
+});
+
 // Initialize everything
 initScene();
-animate(); // Start rendering loop immediately, even without audio/viz

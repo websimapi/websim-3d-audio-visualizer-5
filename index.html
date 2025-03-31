@@ -2,7 +2,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dynamic 3D Audio Visualizer</title>
+    <title>3D Audio Visualizer</title>
     <link rel="stylesheet" href="styles.css">
     <script type="importmap">
         {
@@ -27,10 +27,27 @@
             <label for="smoothing">Smoothing:</label>
             <input type="range" id="smoothing" min="0" max="0.9" step="0.05" value="0.5">
 
-            <!-- Visualization type selector removed -->
+            <select id="visualizationType">
+                <option value="bars">3D Bars</option>
+                <option value="sphere">Reactive Sphere</option>
+                <option value="terrain">Terrain Wave</option>
+                <option value="galaxy">Particle Galaxy</option>
+            </select>
+            <button id="aiGenerateButton">Generate AI Visualizer</button>
         </div>
-        <div id="dynamic-status" style="font-size: 12px; margin-top: 5px;">Waiting to start...</div>
     </div>
+
+    <!-- AI Generation Modal -->
+    <div id="aiModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" id="closeModalButton">&times;</span>
+            <h2>Generated AI Visualizer Code</h2>
+            <p>Copy the code below and save it as a new file (e.g., <code>visualizations/aiGenerated.js</code>). Then, manually add it as an option in <code>visualizer.js</code> and <code>index.html</code>.</p>
+            <textarea id="aiGeneratedCode" readonly></textarea>
+             <div id="aiLoadingIndicator" style="display: none;">Generating... please wait.</div>
+        </div>
+    </div>
+
 
     <script type="module" src="visualizer.js"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>

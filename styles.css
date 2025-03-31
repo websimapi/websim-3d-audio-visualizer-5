@@ -43,6 +43,7 @@ button {
     cursor: pointer;
     font-weight: bold;
     transition: background-color 0.3s;
+    margin-top: 5px;
 }
 
 button:hover {
@@ -82,3 +83,69 @@ select {
     border-radius: 4px;
 }
 
+/* Modal Styles */
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed;
+    z-index: 100;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.6); /* Black w/ opacity */
+    justify-content: center; /* Center horizontally */
+    align-items: center; /* Center vertically */
+}
+
+.modal-content {
+    background-color: #222;
+    color: #eee;
+    margin: auto;
+    padding: 25px;
+    border: 1px solid #555;
+    width: 80%;
+    max-width: 800px;
+    border-radius: 10px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.close-button {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-button:hover,
+.close-button:focus {
+    color: #fff;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+#aiGeneratedCode {
+    width: 100%;
+    height: 400px; /* Adjust as needed */
+    background-color: #111;
+    color: #0f0; /* Green text for code */
+    font-family: 'Courier New', Courier, monospace;
+    border: 1px solid #444;
+    padding: 10px;
+    margin-top: 15px;
+    resize: none; /* Prevent manual resizing */
+    white-space: pre; /* Preserve whitespace and line breaks */
+    overflow: auto; /* Add scrollbars if needed */
+}
+
+#aiLoadingIndicator {
+    margin-top: 15px;
+    color: #ffcc00;
+    text-align: center;
+    font-weight: bold;
+}
