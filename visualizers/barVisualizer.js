@@ -1,8 +1,7 @@
 import * as THREE from 'three';
-import { config } from 'config';
+import { config } from '../config';
 
-// Bar visualization
-function createBarVisualization() {
+export function createBarVisualization() {
     const group = new THREE.Group();
     const barGeometry = new THREE.BoxGeometry(1, 1, 1);
     const barMaterial = new THREE.MeshPhysicalMaterial({
@@ -52,72 +51,36 @@ function createBarVisualization() {
     const particles = new THREE.Points(particleGeometry, particleMaterial);
     group.add(particles);
     
-    // Create bars with enhanced visuals
     for (let i = 0; i < totalBars; i++) {
-        // Create a group for each bar to enable more complex structures
-        const barGroup = new THREE.Group();
         const bar = new THREE.Mesh(barGeometry, barMaterial.clone());
-        
-        // Add glow effect around each bar
-        const glowGeometry = new THREE.BoxGeometry(1.2, 1, 1.2);
-        const glowMaterial = new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0.15,
-            blending: THREE.AdditiveBlending
-        });
-        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-        barGroup.add(glow);
-        
         const angle = (i / totalBars) * Math.PI * 2;
         
+        bar.position.x = Math.sin(angle) * radius;
+        bar.position.z = Math.cos(angle) * radius;
         bar.position.y = 0.5;
         bar.scale.y = config.bars.initialHeight;
         
         // Store original positions for animation
-        barGroup.userData = {
+        bar.userData = {
             index: i,
-            angle: angle,
-            bar: bar,
-            glow: glow
+            angle: angle
         };
         
         // Color gradient based on position
         const hue = i / totalBars;
         bar.material.color.setHSL(hue, 1.0, 0.5);
         
-        barGroup.add(bar);
-        
-        // Position the entire bar group
-        barGroup.position.x = Math.sin(angle) * radius;
-        barGroup.position.z = Math.cos(angle) * radius;
-        
-        group.add(barGroup);
+        group.add(bar);
     }
-    
-    // Add central light beam
-    const beamGeometry = new THREE.CylinderGeometry(1, 10, 80, 32, 1, true);
-    const beamMaterial = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.05,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending
-    });
-    const beam = new THREE.Mesh(beamGeometry, beamMaterial);
-    beam.position.y = 40;
-    beam.userData = { originalScale: beam.scale.clone() };
-    group.add(beam);
     
     return group;
 }
 
-function updateBarVisualization(activeVisualization, dataArray, sensitivity) {
-    const barGroups = activeVisualization.children.filter((child, index) => index >= 2 && index < activeVisualization.children.length - 1); // Skip core, particles and beam
-    const totalBars = barGroups.length;
-    const core = activeVisualization.children[0];
-    const particles = activeVisualization.children[1];
-    const beam = activeVisualization.children[activeVisualization.children.length - 1];
+export function updateBarVisualization(visualizer, dataArray, sensitivity) {
+    const bars = visualizer.children.filter((child, index) => index >= 2); // Skip core and particles
+    const totalBars = bars.length;
+    const core = visualizer.children[0];
+    const particles = visualizer.children[1];
     
     // Calculate average frequency for core effects
     const averageFrequency = dataArray.reduce((sum, val) => sum + val, 0) / dataArray.length / 255;
@@ -125,18 +88,13 @@ function updateBarVisualization(activeVisualization, dataArray, sensitivity) {
     // Update core based on bass frequencies
     const bassPower = (dataArray[0] + dataArray[1] + dataArray[2]) / (3 * 255);
     core.scale.set(
-        1 + bassPower * 0.7,
-        1 + bassPower * 0.7,
-        1 + bassPower * 0.7
+        1 + bassPower * 0.5,
+        1 + bassPower * 0.5,
+        1 + bassPower * 0.5
     );
     
-    core.material.opacity = 0.2 + bassPower * 0.6;
-    core.material.color.setHSL(bassPower * 0.3, 0.9, 0.6);
-    
-    // Update central beam
-    beam.scale.x = beam.scale.z = 0.8 + bassPower * 1.5;
-    beam.material.opacity = 0.03 + bassPower * 0.15;
-    beam.rotation.y += 0.02;
+    core.material.opacity = 0.2 + bassPower * 0.5;
+    core.material.color.setHSL(bassPower * 0.2, 0.8, 0.5);
     
     // Update particles
     const particlePositions = particles.geometry.attributes.position;
@@ -153,21 +111,18 @@ function updateBarVisualization(activeVisualization, dataArray, sensitivity) {
         const dir = new THREE.Vector3(x, y, z).normalize();
         
         // Move particles based on audio 
-        const newDist = (totalBars * 0.2) * (1 + frequencyValue * 3);
+        const newDist = (totalBars * 0.2) * (1 + frequencyValue * 2);
         const newPos = dir.multiplyScalar(newDist);
         
-        particlePositions.setXYZ(i, newPos.x, (y * 0.98) + (Math.random() - 0.5) * 0.7, newPos.z);
+        particlePositions.setXYZ(i, newPos.x, (y * 0.98) + (Math.random() - 0.5) * 0.5, newPos.z);
     }
     
     particlePositions.needsUpdate = true;
-    particles.material.opacity = 0.3 + averageFrequency * 0.7;
-    particles.material.size = 0.8 + averageFrequency * 0.8;
+    particles.material.opacity = 0.2 + averageFrequency * 0.6;
     
-    // Update bar groups
+    // Update bars
     for (let i = 0; i < totalBars; i++) {
-        const barGroup = barGroups[i];
-        const bar = barGroup.userData.bar;
-        const glow = barGroup.userData.glow;
+        const bar = bars[i];
         
         // Map the bar to a frequency bin
         const frequencyIndex = Math.floor(i / totalBars * (dataArray.length / 2));
@@ -180,46 +135,32 @@ function updateBarVisualization(activeVisualization, dataArray, sensitivity) {
         bar.scale.y += (targetHeight - bar.scale.y) * 0.2;
         
         // Scale width based on audio intensity for bulging effect
-        bar.scale.x = 1 + value * 0.6;
-        bar.scale.z = 1 + value * 0.6;
+        bar.scale.x = 1 + value * 0.5;
+        bar.scale.z = 1 + value * 0.5;
         
         // Update bar position so it grows from the bottom
         bar.position.y = bar.scale.y / 2;
         
-        // Update glow to match bar
-        glow.scale.y = bar.scale.y;
-        glow.position.y = bar.position.y;
-        glow.scale.x = bar.scale.x * 1.3;
-        glow.scale.z = bar.scale.z * 1.3;
-        glow.material.opacity = 0.05 + value * 0.25;
-        
         // Add some movement based on low frequencies
-        const angle = barGroup.userData.angle + bassPower * 0.3 + (i / totalBars) * 0.15; 
-        const radius = totalBars * 0.2 * (1 + bassPower * 0.4 + value * 0.15);
+        const angle = bar.userData.angle + bassPower * 0.2 + (i / totalBars) * 0.1; 
+        const radius = totalBars * 0.2 * (1 + bassPower * 0.3 + value * 0.1);
         
-        barGroup.position.x = Math.sin(angle) * radius;
-        barGroup.position.z = Math.cos(angle) * radius;
+        bar.position.x = Math.sin(angle) * radius;
+        bar.position.z = Math.cos(angle) * radius;
         
-        // Rotation effect for bars
-        barGroup.rotation.y = angle + Math.PI;
-        barGroup.rotation.x = value * 0.2;
-        
-        // Update color based on height with improved saturation
+        // Update color based on height
         bar.material.color.setHSL(
-            ((i / totalBars) + (value * 0.3)) % 1.0, 
-            0.8, 
+            ((i / totalBars) + (value * 0.2)) % 1.0, 
+            0.7, 
             0.4 + value * 0.6
         );
         
         // Update material properties
-        bar.material.emissiveIntensity = value * 0.7;
-        bar.material.metalness = 0.4 + value * 0.6;
-        bar.material.roughness = 0.5 - value * 0.3;
-        bar.material.opacity = 0.7 + value * 0.3;
+        bar.material.emissiveIntensity = value * 0.5;
+        bar.material.metalness = 0.3 + value * 0.7;
+        bar.material.opacity = 0.6 + value * 0.4;
     }
     
     // Rotate the entire bar group
-    activeVisualization.rotation.y += 0.003;
+    visualizer.rotation.y += 0.003;
 }
-
-export { createBarVisualization, updateBarVisualization };

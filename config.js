@@ -25,9 +25,26 @@ export const config = {
         color2: 0xff3300     // Peak color
     },
     
+    galaxy: {
+        starCount: 10000,    // Number of stars in galaxy
+        radius: 80,          // Galaxy radius
+        branches: 5,         // Number of spiral arms
+        spin: 1.0,           // Spiral amount
+        randomness: 0.2,     // Random dispersion
+        centerColor: 0xffaa00, // Core color
+        edgeColor: 0x0033ff    // Edge color
+    },
+    
+    waveform: {
+        radius: 60,          // Radius of circular waveform
+        layers: 5,           // Number of concentric waveform layers
+        amplitude: 15,       // Maximum amplitude of waves
+        particleCount: 1000  // Number of particle effects
+    },
+    
     // Audio analysis settings
     audio: {
-        fftSize: 256,       // FFT size (must be power of 2)
+        fftSize: 1024,       // FFT size (must be power of 2)
         minDecibels: -90,
         maxDecibels: -10,
         defaultSmoothing: 0.5

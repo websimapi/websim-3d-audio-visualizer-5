@@ -1,12 +1,16 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { config } from 'config';
-import { createBarVisualization, updateBarVisualization } from './bar-visualizer.js';
-import { createSphereVisualization, updateSphereVisualization } from './sphere-visualizer.js';
-import { createTerrainVisualization, updateTerrainVisualization } from './terrain-visualizer.js';
+
+// Import visualization modules
+import { createBarVisualization, updateBarVisualization } from './visualizers/barVisualizer.js';
+import { createSphereVisualization, updateSphereVisualization } from './visualizers/sphereVisualizer.js';
+import { createTerrainVisualization, updateTerrainVisualization } from './visualizers/terrainVisualizer.js';
+import { createGalaxyVisualization, updateGalaxyVisualization } from './visualizers/galaxyVisualizer.js';
+import { createWaveformVisualization, updateWaveformVisualization } from './visualizers/waveformVisualizer.js';
 
 // Main variables
-let scene, camera, renderer, analyser, dataArray;
+let scene, camera, renderer, analyser, dataArray, timeDataArray;
 let audioContext, mediaStreamSource;
 let activeVisualization = null;
 let controls, visualizationType = 'bars';
@@ -106,6 +110,8 @@ async function setupAudioCapture() {
         
         // Create data array for frequency analysis
         dataArray = new Uint8Array(analyser.frequencyBinCount);
+        // Create array for time domain data (waveform)
+        timeDataArray = new Uint8Array(analyser.fftSize);
         
         // Create the currently selected visualization
         createVisualization(visualizationType);
@@ -140,15 +146,23 @@ function createVisualization(type) {
     
     switch (type) {
         case 'bars':
-            createBarVisualization();
+            activeVisualization = createBarVisualization();
             break;
         case 'sphere':
-            createSphereVisualization();
+            activeVisualization = createSphereVisualization();
             break;
         case 'terrain':
-            createTerrainVisualization();
+            activeVisualization = createTerrainVisualization();
+            break;
+        case 'galaxy':
+            activeVisualization = createGalaxyVisualization();
+            break;
+        case 'waveform':
+            activeVisualization = createWaveformVisualization();
             break;
     }
+    
+    scene.add(activeVisualization);
 }
 
 // Update visualizations based on audio data
@@ -157,19 +171,27 @@ function updateVisualization() {
     
     // Get audio data
     analyser.getByteFrequencyData(dataArray);
+    // Get time domain data for waveform visualizers
+    analyser.getByteTimeDomainData(timeDataArray);
     
     // Get sensitivity value from slider
     const sensitivity = parseFloat(sensitivitySlider.value);
     
     switch (visualizationType) {
         case 'bars':
-            updateBarVisualization(sensitivity);
+            updateBarVisualization(activeVisualization, dataArray, sensitivity);
             break;
         case 'sphere':
-            updateSphereVisualization(sensitivity);
+            updateSphereVisualization(activeVisualization, dataArray, sensitivity);
             break;
         case 'terrain':
-            updateTerrainVisualization(sensitivity);
+            updateTerrainVisualization(activeVisualization, dataArray, sensitivity);
+            break;
+        case 'galaxy':
+            updateGalaxyVisualization(activeVisualization, dataArray, sensitivity);
+            break;
+        case 'waveform':
+            updateWaveformVisualization(activeVisualization, dataArray, timeDataArray, sensitivity);
             break;
     }
 }
