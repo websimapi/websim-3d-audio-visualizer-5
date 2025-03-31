@@ -247,17 +247,17 @@ function updateTerrainVisualization(activeVisualization, dataArray, sensitivity)
     // Animate fog particles
     const fogPositions = fog.geometry.attributes.position;
     const fogSizes = fog.geometry.attributes.size;
-    const originalFogPositions = fog.userData.positions;
-    const originalFogSizes = fog.userData.sizes;
-    
+    const origFogPositions = fog.userData.positions;
+    const origFogSizes = fog.userData.sizes;
+
     for (let i = 0; i < fogPositions.count; i++) {
         const idx = i % dataArray.length;
         const frequencyValue = dataArray[idx] / 255.0;
         
         // Get original position
-        const origX = originalFogPositions[i * 3];
-        const origY = originalFogPositions[i * 3 + 1];
-        const origZ = originalFogPositions[i * 3 + 2];
+        const origX = origFogPositions[i * 3];
+        const origY = origFogPositions[i * 3 + 1];
+        const origZ = origFogPositions[i * 3 + 2];
         
         // Add complex movement
         const time = Date.now() * 0.0005;
@@ -275,7 +275,7 @@ function updateTerrainVisualization(activeVisualization, dataArray, sensitivity)
         );
         
         // Update particle size based on audio
-        fogSizes.setX(i, originalFogSizes[i] * (0.8 + frequencyValue * 1.5));
+        fogSizes.setX(i, origFogSizes[i] * (0.8 + frequencyValue * 1.5));
     }
     
     fogPositions.needsUpdate = true;
