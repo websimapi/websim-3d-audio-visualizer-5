@@ -1,0 +1,41 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Audio Visualizer</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.149.0/examples/jsm/",
+                "config": "./config.js"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="visualizer-container"></div>
+    
+    <div class="controls">
+        <button id="startButton">Start Visualizer</button>
+        <div id="status">Select a tab to capture</div>
+        <div class="settings">
+            <label for="sensitivity">Sensitivity:</label>
+            <input type="range" id="sensitivity" min="0.5" max="5" step="0.1" value="2">
+            
+            <label for="smoothing">Smoothing:</label>
+            <input type="range" id="smoothing" min="0" max="0.9" step="0.05" value="0.5">
+            
+            <select id="visualizationType">
+                <option value="bars">3D Bars</option>
+                <option value="sphere">Reactive Sphere</option>
+                <option value="terrain">Terrain Wave</option>
+            </select>
+        </div>
+    </div>
+    
+    <script type="module" src="visualizer.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
